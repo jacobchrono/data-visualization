@@ -7,8 +7,10 @@ import matplotlib.pyplot as plt
 import os
 import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import plotly.io as pio
 import numpy as np
+
+from plotly.subplots import make_subplots
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from PIL import Image, ImageDraw, ImageFont
 
@@ -547,7 +549,7 @@ data['day_of_month'] = data['time_posted'].dt.day
 data['hour_of_day'] = data['time_posted'].dt.hour
 
 # Ensure the HTML folder exists
-os.makedirs('HTML', exist_ok=True)
+os.makedirs('html', exist_ok=True)
 
 # Plot 1: Histogram by Day of the Week
 fig1 = px.histogram(data, x='day_of_week', title='Number of Postings by Day of the Week',
@@ -567,11 +569,78 @@ fig3 = px.histogram(data, x='hour_of_day', title='Number of Postings by Hour of 
 fig3.update_layout(xaxis_title="Hour of the Day", yaxis_title="Number of Postings", template="plotly_white")
 fig3.write_html('HTML/histogram_hour_of_day.html')
 
-# Interactive Visual - Filter by Location and Unit of Time
-fig4 = px.histogram(data, x='time_posted', color='location', title='Interactive Postings Histogram',
-                    labels={'time_posted':'Time Posted', 'count':'Number of Postings'},
-                    facet_row='day_of_week', facet_col='hour_of_day')
-fig4.update_layout(xaxis_title="Time Posted", yaxis_title="Number of Postings", template="plotly_white")
-fig4.write_html('HTML/interactive_histogram.html')
-
 print("Histograms have been saved in the HTML folder.")
+
+# Count the number of postings per location
+location_counts = data['location'].value_counts()
+
+# Get the top 10 locations
+top_10_locations = location_counts.head(10).index.tolist()
+
+# Generate and save histograms for each of the top 10 locations
+for location in top_10_locations:
+    # Filter data for the specific location
+    location_data = data[data['location'] == location]
+    
+    # Extract the hour of the day
+    location_data['hour_of_day'] = pd.to_datetime(location_data['time_posted']).dt.hour
+    
+    # Create histogram
+    fig = px.histogram(location_data, x='hour_of_day', title=f'Number of Postings by Hour of the Day in {location}',
+                       labels={'hour_of_day':'Hour of the Day', 'count':'Number of Postings'})
+    fig.update_layout(xaxis_title="Hour of the Day", yaxis_title="Number of Postings", template="plotly_white")
+    
+    # Save the histogram as an HTML file
+    fig.write_html(f'html/histogram_hour_of_day_{location}.html')
+
+print("Histograms for top 10 locations have been saved in the html folder.")
+
+# One more try at the interactive graph
+# Create a figure
+fig = go.Figure()
+
+# Get the top 10 locations
+top_25_locations = location_counts.head(25).index.tolist()
+
+
+# Generate histograms for each of the top 25 locations and add them to the figure
+for location in top_25_locations:
+    # Filter data for the specific location
+    location_data = data[data['location'] == location]
+    
+    # Extract the hour of the day
+    location_data['hour_of_day'] = pd.to_datetime(location_data['time_posted']).dt.hour
+    
+    # Add histogram to the figure
+    fig.add_trace(
+        go.Histogram(
+            x=location_data['hour_of_day'],
+            name=location,
+            visible=(location == top_25_locations[0])  # Only the first location's histogram is visible by default
+        )
+    )
+
+# Update layout with a dropdown to select the location
+fig.update_layout(
+    updatemenus=[
+        dict(
+            buttons=[dict(label=location,
+                          method="update",
+                          args=[{"visible": [loc == location for loc in top_25_locations]},
+                                {"title": f"Number of Postings by Hour of the Day in {location}"}])
+                     for location in top_25_locations],
+            direction="down",
+            pad={"r": 10, "t": 10},
+            showactive=True,
+        ),
+    ],
+    xaxis_title="Hour of the Day",
+    yaxis_title="Number of Postings",
+    template="plotly_white",
+    title=f"Number of Postings by Hour of the Day in {top_25_locations[0]}"  # Default title
+)
+
+# Save the interactive plot as an HTML file
+pio.write_html(fig, file='html/interactive_histogram_by_location.html', auto_open=False)
+
+print("Interactive histogram saved as html/interactive_histogram_by_location.html")
