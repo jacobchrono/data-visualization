@@ -9,7 +9,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 import numpy as np
+import ipywidgets as widgets
 
+from scipy.stats import pearsonr
+from IPython.display import display
 from plotly.subplots import make_subplots
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from PIL import Image, ImageDraw, ImageFont
@@ -644,3 +647,87 @@ fig.update_layout(
 pio.write_html(fig, file='html/interactive_histogram_by_location.html', auto_open=False)
 
 print("Interactive histogram saved as html/interactive_histogram_by_location.html")
+
+'''
+• (Difficult) Ultimately, one way people will interact with this data set is when they arrive at
+a hosted site that helps them understand car prices and helps them find a good deal on
+a car. For this task, assume that the user has given you a make and model to focus on
+and optionally, a range of years. Create a visualization that captures the interplay
+between age and mileage for a given make and model.
+'''
+
+# Drop rows with missing price or odometer values, as they are essential for the plot
+car = car.dropna(subset=['price', 'odometer'])
+
+# Create a list of unique makes and models
+makes = car['make'].unique()
+models = car['model'].unique()
+
+# Dropdown widgets for user to select make and model
+make_dropdown = widgets.Dropdown(options=makes, description='Make:')
+model_dropdown = widgets.Dropdown(description='Model:')
+
+# Update the models based on the selected make
+def update_models(*args):
+    selected_make = make_dropdown.value
+    filtered_models = car[car['make'] == selected_make]['model'].unique()
+    model_dropdown.options = filtered_models
+
+make_dropdown.observe(update_models, 'value')
+
+# Function to create the scatter plot
+def plot_graph(make, model):
+    # Filter data based on user selection
+    filtered_data = car[(car['make'] == make) & (car['model'] == model)]
+    
+    # Calculate correlation coefficient and number of observations
+    if len(filtered_data) > 1:
+        correlation, _ = pearsonr(filtered_data['odometer'], filtered_data['price'])
+        correlation_text = f"Correlation: {correlation:.2f}"
+    else:
+        correlation_text = "Correlation: N/A"
+    
+    observations_text = f"Observations: {len(filtered_data)}"
+    
+    # Create the scatter plot
+    fig = px.scatter(
+        filtered_data,
+        x='odometer',
+        y='price',
+        trendline='ols',
+        title=f'{make} {model} Price vs Mileage',
+    )
+    
+    # Customize the layout
+    fig.update_layout(
+        title=dict(text=f'{make} {model} Price vs Mileage', x=0.01, xanchor='left'),
+        showlegend=False,
+        margin=dict(l=0, r=0, t=30, b=0),
+        xaxis_title="Mileage",
+        yaxis_title="Price",
+        paper_bgcolor="white",
+        plot_bgcolor="white",
+    )
+    
+    # Remove gridlines from the top and right
+    fig.update_xaxes(showgrid=True, gridcolor='lightgrey')
+    fig.update_yaxes(showgrid=True, gridcolor='lightgrey')
+    fig.update_xaxes(showline=True, linewidth=1, linecolor='black')
+    fig.update_yaxes(showline=True, linewidth=1, linecolor='black')
+    
+    # Add text annotations for correlation and number of observations
+    fig.add_trace(go.Scatter(
+        x=[filtered_data['odometer'].max()],
+        y=[filtered_data['price'].min()],
+        text=[f"{correlation_text}<br>{observations_text}"],
+        mode="text",
+        showlegend=False
+    ))
+    
+    fig.show()
+
+# Connect the plot function to widget changes
+widgets.interactive(plot_graph, make=make_dropdown, model=model_dropdown)
+
+# Display the dropdowns and plot
+display(make_dropdown, model_dropdown)
